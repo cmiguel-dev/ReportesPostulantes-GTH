@@ -3,7 +3,7 @@
 "use client";
 
 import { useState } from "react";
-import { normalizarUniversidad } from "../utils/normalizers";
+import { normalizarUniversidad, getEstadisticasNormalizacion } from "../utils/normalizers";
 
 export default function DebugNormalizer({ data }) {
   const [showDebug, setShowDebug] = useState(false);
@@ -14,40 +14,67 @@ export default function DebugNormalizer({ data }) {
         className="btn btn-secondary btn-sm mt-3"
         onClick={() => setShowDebug(true)}
       >
-        🐛 Ver problemas de normalización
+        🐛 Ver estadísticas de normalización
       </button>
     );
   }
 
-  const problemas = data
-    .filter(item => {
-      const normalizado = normalizarUniversidad(item.universidad);
-      return item.universidad !== normalizado && 
-             !normalizado.includes("Universidad") && 
-             !normalizado.includes("Instituto") &&
-             item.universidad !== "No especificado";
-    })
-    .slice(0, 20); // Mostrar solo primeros 20
+  const stats = getEstadisticasNormalizacion(data);
+  
+  // Mostrar ejemplos de normalización
+  const ejemplos = data
+    .filter(item => item.universidad_original && item.universidad_original !== 'No especificado')
+    .slice(0, 15)
+    .map(item => ({
+      original: item.universidad_original,
+      normalizado: normalizarUniversidad(item.universidad_original)
+    }));
 
   return (
-    <div className="alert alert-warning mt-3">
-      <div className="d-flex justify-content-between">
-        <strong>⚠️ Textos que no se normalizaron correctamente</strong>
+    <div className="alert alert-info mt-3">
+      <div className="d-flex justify-content-between align-items-center">
+        <strong>📊 Estadísticas de normalización</strong>
         <button 
           className="btn-close" 
           onClick={() => setShowDebug(false)}
         ></button>
       </div>
-      <ul className="mt-2">
-        {problemas.map((item, idx) => (
-          <li key={idx}>
-            <strong>Original:</strong> {item.universidad}<br />
-            <strong>Normalizado:</strong> {normalizarUniversidad(item.universidad)}
-            <hr />
-          </li>
-        ))}
-      </ul>
-      {problemas.length === 0 && <p>✅ Todos los textos se normalizan bien</p>}
+      
+      <div className="mt-2">
+        <p><strong>Total registros:</strong> {stats.total}</p>
+        <p><strong>✅ Normalizados correctamente:</strong> {stats.normalizados}</p>
+        <p><strong>⚠️ No normalizados:</strong> {stats.noNormalizados}</p>
+      </div>
+      
+      {stats.ejemplosNoNormalizados.length > 0 && (
+        <>
+          <hr />
+          <strong>📝 Textos que necesitan reglas:</strong>
+          <ul className="mt-2">
+            {stats.ejemplosNoNormalizados.map((texto, idx) => (
+              <li key={idx}>"{texto}"</li>
+            ))}
+          </ul>
+        </>
+      )}
+      
+      <hr />
+      <strong>✨ Ejemplos de normalización:</strong>
+      <div className="table-responsive mt-2">
+        <table className="table table-sm table-bordered">
+          <thead>
+            <tr><th>Original</th><th>Normalizado</th></tr>
+          </thead>
+          <tbody>
+            {ejemplos.map((ej, idx) => (
+              <tr key={idx}>
+                <td style={{maxWidth: '300px', wordWrap: 'break-word'}}>{ej.original}</td>
+                <td>{ej.normalizado}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

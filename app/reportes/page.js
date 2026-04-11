@@ -16,17 +16,17 @@ export default function ReportesPage() {
     carreras: {},
   });
 
+  // Agregar console.log para verificar conteo
   async function loadData() {
     const res = await getPostulantes();
-
-    // 🔥 NORMALIZAR + LIMPIAR
+    console.log("📊 Datos cargados:", res.length);
+    
     const cleaned = res.map((item) => ({
       ...item,
       universidad: normalizarUniversidad(item.universidad),
     }));
-
+    
     setData(cleaned);
-
     generarEstadisticas(cleaned);
   }
 
