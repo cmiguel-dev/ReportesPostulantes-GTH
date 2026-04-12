@@ -4,9 +4,8 @@
 
 import { useEffect, useState } from "react";
 import { getPostulantes } from "../../services/postulantesService";
-import { normalizarUniversidad } from "../../utils/normalizers";
+import { normalizarArea, normalizarCarrera } from "../../utils/normalizersCampos";
 import BarChart from "../../components/BarChart";
-import DebugNormalizer from "../../components/DebugNormalizer";
 
 export default function ReportesPage() {
   const [data, setData] = useState([]);
@@ -16,16 +15,16 @@ export default function ReportesPage() {
     carreras: {},
   });
 
-  // Agregar console.log para verificar conteo
   async function loadData() {
     const res = await getPostulantes();
-    console.log("📊 Datos cargados:", res.length);
-    
+
+    // Solo normalizar áreas y carreras (universidades YA vienen limpias)
     const cleaned = res.map((item) => ({
       ...item,
-      universidad: normalizarUniversidad(item.universidad),
+      area: normalizarArea(item.area),
+      carrera: normalizarCarrera(item.carrera),
     }));
-    
+
     setData(cleaned);
     generarEstadisticas(cleaned);
   }
@@ -36,14 +35,9 @@ export default function ReportesPage() {
     const carreras = {};
 
     data.forEach((item) => {
-      universidades[item.universidad] =
-        (universidades[item.universidad] || 0) + 1;
-
-      areas[item.area] =
-        (areas[item.area] || 0) + 1;
-
-      carreras[item.carrera] =
-        (carreras[item.carrera] || 0) + 1;
+      universidades[item.universidad] = (universidades[item.universidad] || 0) + 1;
+      areas[item.area] = (areas[item.area] || 0) + 1;
+      carreras[item.carrera] = (carreras[item.carrera] || 0) + 1;
     });
 
     setStats({ universidades, areas, carreras });
@@ -100,9 +94,12 @@ export default function ReportesPage() {
 
       <h4 className="mt-4">📊 Top Universidades</h4>
       <BarChart dataObj={stats.universidades} title="Universidades" />
+      
       <h4 className="mt-4">📊 Top Áreas</h4>
       <BarChart dataObj={stats.areas} title="Áreas" />
-      <DebugNormalizer data={data} />
+      
+      <h4 className="mt-4">📊 Top Carreras</h4>
+      <BarChart dataObj={stats.carreras} title="Carreras" />
     </div>
   );
 }

@@ -14,27 +14,23 @@ export async function getPostulantes() {
     const json = await res.json();
     const data = Array.isArray(json) ? json : json.data || [];
     
-    // Filtrar filas VÁLIDAS (que tengan al menos nombre o universidad)
+    // Filtrar filas válidas
     const datosValidos = data.filter(item => {
-      const tieneNombre = item["Nombre y apellidos"] && 
-                         item["Nombre y apellidos"].trim() !== "";
-      const tieneUniversidad = item["¿A qué institución o universidad perteneces?"] && 
-                              item["¿A qué institución o universidad perteneces?"].trim() !== "";
-      
+      const tieneNombre = item["Nombre y apellidos"]?.trim();
+      const tieneUniversidad = item["DatosFormateados - Institucion e Universidad"]?.trim();
       return tieneNombre || tieneUniversidad;
     });
     
-    console.log(`📊 Total filas originales: ${data.length}`);
-    console.log(`✅ Filas válidas: ${datosValidos.length}`);
-    console.log(`🗑️ Filas vacías eliminadas: ${data.length - datosValidos.length}`);
+    console.log(`📊 Total filas: ${data.length} | Válidas: ${datosValidos.length}`);
     
     return datosValidos.map((item, index) => ({
       id: index,
       fecha: item["Fecha"] || null,
       nombre: item["Nombre y apellidos"]?.trim() || "Sin nombre",
       carrera: item["¿De qué carrera eres?"]?.trim() || "No especificado",
-      universidad: item["¿A qué institución o universidad perteneces?"]?.trim() || "No especificado",
-      universidad_original: item["¿A qué institución o universidad perteneces?"]?.trim() || null,
+      universidad: item["DatosFormateados - Institucion e Universidad"]?.trim() === "Sin relación" 
+        ? "Universidad/Instituto no especificado" 
+        : (item["DatosFormateados - Institucion e Universidad"]?.trim() || "No especificado"),
       area: item["¿Para qué área postulas?"]?.trim() || "No especificado",
       modalidad: item["¿Cuál sería tu modalidad de trabajo?"]?.trim() || "No especificado",
     }));
