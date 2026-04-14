@@ -1,4 +1,5 @@
 // app/postulantes-actuales/page.js
+
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
@@ -6,9 +7,11 @@ import { getPostulantesActuales } from "../../services/postulantesActualesServic
 import PostulantesCharts from "../../components/PostulantesCharts";
 
 export default function PostulantesActualesPage() {
+  const [todosPostulantes, setTodosPostulantes] = useState([]);
   const [postulantes, setPostulantes] = useState([]);
   const [filteredPostulantes, setFilteredPostulantes] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [modoVisualizacion, setModoVisualizacion] = useState("ultimos"); // "ultimos" o "todos"
   const [stats, setStats] = useState({
     areas: {},
     carreras: {},
@@ -21,16 +24,35 @@ export default function PostulantesActualesPage() {
   const [filtroEstado, setFiltroEstado] = useState("todos");
   const [filtroPeriodo, setFiltroPeriodo] = useState("todos");
   const [busqueda, setBusqueda] = useState("");
-  const [mostrarTodos, setMostrarTodos] = useState(false);
   const [paginaActual, setPaginaActual] = useState(1);
   const itemsPorPagina = 20;
 
   async function loadData() {
     setLoading(true);
-    const data = await getPostulantesActuales(mostrarTodos ? "all" : 200, 0);
-    setPostulantes(data);
+    // Cargar TODOS los datos primero (sin límite)
+    const data = await getPostulantesActuales(null, 0);
+    setTodosPostulantes(data);
+    
+    // Aplicar vista de últimos 200 por defecto
+    aplicarVista(data, "ultimos");
     generarEstadisticas(data);
     setLoading(false);
+  }
+
+  function aplicarVista(data, modo) {
+    if (modo === "ultimos") {
+      // Tomar los primeros 200 (ya están ordenados descendentemente por ID)
+      setPostulantes(data.slice(0, 200));
+    } else {
+      // Mostrar todos
+      setPostulantes([...data]);
+    }
+  }
+
+  function cambiarModo(modo) {
+    setModoVisualizacion(modo);
+    aplicarVista(todosPostulantes, modo);
+    setPaginaActual(1);
   }
 
   function generarEstadisticas(data) {
@@ -41,19 +63,10 @@ export default function PostulantesActualesPage() {
     const mediosEntero = {};
 
     data.forEach((item) => {
-      // Áreas
       areas[item.area] = (areas[item.area] || 0) + 1;
-      
-      // Carreras
       carreras[item.carrera] = (carreras[item.carrera] || 0) + 1;
-      
-      // Universidades
       universidades[item.universidad] = (universidades[item.universidad] || 0) + 1;
-      
-      // Estados
       estados[item.estado_postulante] = (estados[item.estado_postulante] || 0) + 1;
-      
-      // Medios de enteró
       mediosEntero[item.medio_enteró] = (mediosEntero[item.medio_enteró] || 0) + 1;
     });
 
@@ -115,7 +128,7 @@ export default function PostulantesActualesPage() {
 
   useEffect(() => {
     loadData();
-  }, [mostrarTodos]);
+  }, []);
 
   // Paginación
   const indexOfLastItem = paginaActual * itemsPorPagina;
@@ -160,17 +173,27 @@ export default function PostulantesActualesPage() {
     <div>
       <div className="d-flex justify-content-between align-items-center mb-4">
         <h2>📝 Postulantes Actuales (Formulario Wix)</h2>
-        <button 
-          className="btn btn-outline-primary"
-          onClick={() => setMostrarTodos(!mostrarTodos)}
-        >
-          {mostrarTodos ? "📄 Mostrar solo últimos" : "📚 Mostrar todos"}
-        </button>
+        <div className="btn-group" role="group">
+          <button 
+            className={`btn ${modoVisualizacion === "ultimos" ? "btn-primary" : "btn-outline-primary"}`}
+            onClick={() => cambiarModo("ultimos")}
+          >
+            📄 Mostrar últimos 200
+          </button>
+          <button 
+            className={`btn ${modoVisualizacion === "todos" ? "btn-primary" : "btn-outline-primary"}`}
+            onClick={() => cambiarModo("todos")}
+          >
+            📚 Mostrar todos ({todosPostulantes.length})
+          </button>
+        </div>
       </div>
       
       <div className="alert alert-info">
-        <strong>Total de postulantes:</strong> {postulantes.length} | 
-        <strong> Mostrando:</strong> {filteredPostulantes.length} después de filtros
+        <strong>Total de postulantes:</strong> {todosPostulantes.length} | 
+        <strong> Mostrando:</strong> {postulantes.length} | 
+        <strong> Después de filtros:</strong> {filteredPostulantes.length}
+        {modoVisualizacion === "ultimos" && <span className="ms-2 badge bg-primary">Últimos 200 por ID</span>}
       </div>
 
       {/* Filtros */}
@@ -236,6 +259,7 @@ export default function PostulantesActualesPage() {
               <thead className="table-dark">
                 <tr>
                   <th>#</th>
+                  <th>ID</th>
                   <th>Fecha</th>
                   <th>Nombre</th>
                   <th>Teléfono</th>
@@ -251,6 +275,7 @@ export default function PostulantesActualesPage() {
                 {currentItems.map((postulante, idx) => (
                   <tr key={postulante.id}>
                     <td>{indexOfFirstItem + idx + 1}</td>
+                    <td><strong>{postulante.id}</strong></td>
                     <td>{postulante.fecha_envio ? new Date(postulante.fecha_envio).toLocaleDateString('es-PE') : '-'}</td>
                     <td>{postulante.nombre}</td>
                     <td>{postulante.telefono}</td>
@@ -285,11 +310,12 @@ export default function PostulantesActualesPage() {
                 <li className={`page-item ${paginaActual === 1 ? 'disabled' : ''}`}>
                   <button className="page-link" onClick={() => setPaginaActual(paginaActual - 1)}>Anterior</button>
                 </li>
-                {[...Array(totalPages)].map((_, i) => (
+                {[...Array(Math.min(totalPages, 10))].map((_, i) => (
                   <li key={i} className={`page-item ${paginaActual === i + 1 ? 'active' : ''}`}>
                     <button className="page-link" onClick={() => setPaginaActual(i + 1)}>{i + 1}</button>
                   </li>
                 ))}
+                {totalPages > 10 && <li className="page-item disabled"><span className="page-link">...</span></li>}
                 <li className={`page-item ${paginaActual === totalPages ? 'disabled' : ''}`}>
                   <button className="page-link" onClick={() => setPaginaActual(paginaActual + 1)}>Siguiente</button>
                 </li>
@@ -308,7 +334,7 @@ export default function PostulantesActualesPage() {
           <div className="modal-dialog modal-lg">
             <div className="modal-content">
               <div className="modal-header">
-                <h5 className="modal-title">Detalles del Postulante</h5>
+                <h5 className="modal-title">Detalles del Postulante - ID: {postulante.id}</h5>
                 <button type="button" className="btn-close" data-bs-dismiss="modal"></button>
               </div>
               <div className="modal-body">
@@ -334,9 +360,9 @@ export default function PostulantesActualesPage() {
                 <div className="row">
                   <div className="col-12">
                     <p><strong>💼 Experiencia previa:</strong> {postulante.experiencia_previa || "No especifica"}</p>
-                    <p><strong>🔗 LinkedIn:</strong> {postulante.linkedin ? <a href={postulante.linkedin} target="_blank">Ver perfil</a> : "No especifica"}</p>
+                    <p><strong>🔗 LinkedIn:</strong> {postulante.linkedin ? <a href={postulante.linkedin} target="_blank" rel="noopener noreferrer">Ver perfil</a> : "No especifica"}</p>
                     {postulante.cv_url && (
-                      <p><strong>📄 CV:</strong> <a href={postulante.cv_url} target="_blank">Descargar CV</a></p>
+                      <p><strong>📄 CV:</strong> <a href={postulante.cv_url} target="_blank" rel="noopener noreferrer">Descargar CV</a></p>
                     )}
                     <p><strong>✅ Cumplió pasos:</strong> {postulante.cumplio_pasos}</p>
                     {postulante.observacion_rechazo && (
@@ -355,4 +381,3 @@ export default function PostulantesActualesPage() {
     </div>
   );
 }
-

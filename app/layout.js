@@ -23,7 +23,7 @@ export default function RootLayout({ children }) {
             className="bg-dark text-white p-3"
             style={{ width: "250px", minHeight: "100vh" }}
           >
-            <h4>GTH</h4>
+            <h4>Reporter de Postulantes - GTH</h4>
             <hr />
 
             <ul className="nav flex-column">
@@ -32,20 +32,20 @@ export default function RootLayout({ children }) {
                   Onboarding
                 </a>
               </li>
-
+              <hr />
               <li className="nav-item">
                 <a href="/reportes" className="nav-link text-white">
-                  Reportes Postulantes antiguos
+                  Postulantes Antiguos
                 </a>
               </li>
-
+              <hr />
               <li className="nav-item">
                 <a href="/postulantes-actuales" className="nav-link text-white">
                 Postulantes Actuales (Wix)
                 </a>
               </li>
 
-              <li className="nav-item">
+              {/* <li className="nav-item">
                 <a href="/permisos" className="nav-link text-white">
                   Permisos
                 </a>
@@ -55,7 +55,7 @@ export default function RootLayout({ children }) {
                 <a href="/salida" className="nav-link text-white">
                   Salida
                 </a>
-              </li>
+              </li> */}
             </ul>
           </aside>
 

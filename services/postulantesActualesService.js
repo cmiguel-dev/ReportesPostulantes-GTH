@@ -3,15 +3,10 @@
 const BASE_URL = process.env.NEXT_PUBLIC_SHEETDB_POSTULANTES_ACTUALES;
 const SHEET_NAME = encodeURIComponent("Postulantes Actualizado");
 
-export async function getPostulantesActuales(limit = 50, offset = 0, filters = {}) {
+export async function getPostulantesActuales(limite = null, offset = 0, filters = {}) {
   try {
-    // Construir URL con paginación
+    // Construir URL - SIN limit inicial para obtener todos y luego ordenar
     let url = `${BASE_URL}?sheet=${SHEET_NAME}`;
-    
-    // Agregar límite si es necesario
-    if (limit && limit !== 'all') {
-      url += `&limit=${limit}&offset=${offset}`;
-    }
     
     const res = await fetch(url, {
       cache: "no-store",
@@ -29,38 +24,59 @@ export async function getPostulantesActuales(limit = 50, offset = 0, filters = {
     });
     
     // Mapear y normalizar los datos
-    let postulantes = datosValidos.map((item, index) => ({
-      id: index,
-      fecha_envio: item["Fecha de envio"] || null,
-      fecha_postulacion: item["Fecha de envio"] ? new Date(item["Fecha de envio"]) : null,
-      email: item["Correo electrónico"]?.trim() || "",
-      nombre: item["Nombre y apellidos"]?.trim() || "Sin nombre",
-      telefono: item["Teléfono"]?.trim() || "",
-      edad: item["Edad"] || "",
-      area: normalizarAreaPostulacion(item["¿A qué área postula?"]) || "No especificado",
-      carrera: normalizarCarreraPostulante(item["¿De qué carrera o profesión eres?"]) || "No especificado",
-      universidad: normalizarUniversidad(item["¿A qué institución o universidad perteneces?"]) || "No especificado",
-      ciclo: item["¿En qué ciclo o nivel académico te encuentras?"] || "",
-      distrito: item["Distrito"] || "",
-      provincia: item["Provincia"] || "",
-      pais: item["Pais"] || "Perú",
-      direccion: item["Dirección del domicilio"] || "",
-      trabaja_actualmente: item["Actualmente, ¿trabajas o participas de algún voluntariado o agrupación estudiantil?"] || "",
-      medio_enteró: normalizarMedioEntero(item["¿Por que medio se enteró acerca de nuestra convocatoria?"]) || "No especificado",
-      modalidad_postula: item["¿A cuál modalidad postula?"] || "",
-      modalidad_trabajo: item["¿Cuál sería tu modalidad de trabajo?"] || "",
-      beneficios_interes: item["¿Cuáles son los beneficios que más te interesan de esta experiencia en Sanilab?"] || "",
-      linea_carrera: item["Línea de carrera: Que nivel desea llega?"] || "",
-      experiencia_previa: item["¿Tienes alguna experiencia previa? Comenta brevemente si así fuera"] || "",
-      linkedin: item["Coloque link de sus red social"] || "",
-      cv_url: extraerCVUrl(item["Adjunta tu CV"]),
-      cumplio_pasos: item["Cumplí con los pasos Antes de la entrevista"] || "No",
-      observacion_rechazo: item["Observacion/ Razon de rechazo"] || "",
-      // Estado del postulante (nueva columna que agregarás en Google Sheets)
-      estado_postulante: item["Estado de Postulante"] || "falta agendar"
-    }));
+    let postulantes = datosValidos.map((item, index) => {
+      // Extraer ID de la columna "ID" en el Excel (con mayúsculas)
+      let id = item["ID"] || index;
+      // Convertir a número si es string
+      if (typeof id === 'string') id = parseInt(id) || index;
+      
+      return {
+        id: id,
+        fecha_envio: item["Fecha de envio"] || null,
+        fecha_postulacion: item["Fecha de envio"] ? new Date(item["Fecha de envio"]) : null,
+        email: item["Correo electrónico"]?.trim() || "",
+        nombre: item["Nombre y apellidos"]?.trim() || "Sin nombre",
+        telefono: item["Teléfono"]?.trim() || "",
+        edad: item["Edad"] || "",
+        area: normalizarAreaPostulacion(item["¿A qué área postula?"]) || "No especificado",
+        carrera: normalizarCarreraPostulante(item["¿De qué carrera o profesión eres?"]) || "No especificado",
+        universidad: normalizarUniversidad(item["¿A qué institución o universidad perteneces?"]) || "No especificado",
+        ciclo: item["¿En qué ciclo o nivel académico te encuentras?"] || "",
+        distrito: item["Distrito"] || "",
+        provincia: item["Provincia"] || "",
+        pais: item["Pais"] || "Perú",
+        direccion: item["Dirección del domicilio"] || "",
+        trabaja_actualmente: item["Actualmente, ¿trabajas o participas de algún voluntariado o agrupación estudiantil?"] || "",
+        medio_enteró: normalizarMedioEntero(item["¿Por que medio se enteró acerca de nuestra convocatoria?"]) || "No especificado",
+        modalidad_postula: item["¿A cuál modalidad postula?"] || "",
+        modalidad_trabajo: item["¿Cuál sería tu modalidad de trabajo?"] || "",
+        beneficios_interes: item["¿Cuáles son los beneficios que más te interesan de esta experiencia en Sanilab?"] || "",
+        linea_carrera: item["Línea de carrera: Que nivel desea llega?"] || "",
+        experiencia_previa: item["¿Tienes alguna experiencia previa? Comenta brevemente si así fuera"] || "",
+        linkedin: item["Coloque link de sus red social"] || "",
+        cv_url: extraerCVUrl(item["Adjunta tu CV"]),
+        cumplio_pasos: item["Cumplí con los pasos Antes de la entrevista"] || "No",
+        observacion_rechazo: item["Observacion/ Razon de rechazo"] || "",
+        estado_postulante: item["Estado de Postulante"] || "falta agendar"
+      };
+    });
     
-    // Aplicar filtros
+    // ORDENAR POR ID DESCENDENTE (más reciente primero)
+    // Esto asegura que los últimos registros (ID más alto) aparezcan primero
+    postulantes.sort((a, b) => {
+      const idA = typeof a.id === 'number' ? a.id : 0;
+      const idB = typeof b.id === 'number' ? b.id : 0;
+      return idB - idA; // Descendente
+    });
+    
+    // Si hay límite, tomar los primeros N después del ordenamiento
+    if (limite && limite !== 'all' && typeof limite === 'number') {
+      const start = offset;
+      const end = start + limite;
+      postulantes = postulantes.slice(start, end);
+    }
+    
+    // Aplicar filtros adicionales
     if (filters.estado && filters.estado !== 'todos') {
       postulantes = postulantes.filter(p => p.estado_postulante === filters.estado);
     }
@@ -74,14 +90,7 @@ export async function getPostulantesActuales(limit = 50, offset = 0, filters = {
       });
     }
     
-    // Ordenar por fecha (más recientes primero)
-    postulantes.sort((a, b) => {
-      if (!a.fecha_postulacion) return 1;
-      if (!b.fecha_postulacion) return -1;
-      return b.fecha_postulacion - a.fecha_postulacion;
-    });
-    
-    console.log(`📊 Total postulantes actuales: ${postulantes.length}`);
+    console.log(`📊 Total postulantes actuales: ${datosValidos.length} | Mostrando: ${postulantes.length}`);
     
     return postulantes;
     
@@ -91,7 +100,7 @@ export async function getPostulantesActuales(limit = 50, offset = 0, filters = {
   }
 }
 
-// Funciones de normalización
+// Funciones de normalización (igual que antes)
 function normalizarAreaPostulacion(area = "") {
   if (!area || area === "No especificado") return "No especificado";
   
@@ -99,6 +108,9 @@ function normalizarAreaPostulacion(area = "") {
     "gestión digital": "Gestión Digital",
     "sistema": "Gestión Digital",
     "digital": "Gestión Digital",
+    "medio ambiente": "Medio Ambiente y ecología",
+    "ambiental": "Medio Ambiente y ecología",
+    "ecología": "Medio Ambiente y ecología",
     "marketing": "Marketing",
     "ventas": "Ventas",
     "operaciones": "Operaciones",
@@ -126,6 +138,7 @@ function normalizarCarreraPostulante(carrera = "") {
     "sistemas": "Ingeniería de Sistemas",
     "software": "Ingeniería de Software",
     "industrial": "Ingeniería Industrial",
+    "ambiental": "Ingeniería Ambiental",
     "administración": "Administración",
     "marketing": "Marketing",
     "comunicaciones": "Comunicaciones",
@@ -152,7 +165,9 @@ function normalizarUniversidad(universidad = "") {
     "pacifico": "Universidad del Pacífico",
     "católica": "PUCP",
     "san martín": "USMP",
-    "científica": "Universidad Científica del Sur"
+    "científica": "Universidad Científica del Sur",
+    "tecnológica del perú": "Universidad Tecnológica del Perú",
+    "utp": "Universidad Tecnológica del Perú"
   };
   
   const uniLower = universidad.toLowerCase().trim();
