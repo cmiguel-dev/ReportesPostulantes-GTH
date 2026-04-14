@@ -1,5 +1,7 @@
 // app/layout.js
 
+import Script from "next/script";
+
 export const metadata = {
   title: "GTH System",
   description: "Sistema de Gestión de Talento Humano",
@@ -38,6 +40,12 @@ export default function RootLayout({ children }) {
               </li>
 
               <li className="nav-item">
+                <a href="/postulantes-actuales" className="nav-link text-white">
+                Postulantes Actuales (Wix)
+                </a>
+              </li>
+
+              <li className="nav-item">
                 <a href="/permisos" className="nav-link text-white">
                   Permisos
                 </a>
@@ -56,6 +64,10 @@ export default function RootLayout({ children }) {
             {children}
           </main>
         </div>
+        <Script
+          src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"
+          strategy="afterInteractive"
+        />
       </body>
     </html>
   );
