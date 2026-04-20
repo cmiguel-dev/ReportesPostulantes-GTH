@@ -1,81 +1,44 @@
 // app/postulantes-actuales/page.js
-
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState } from "react";
 import { getPostulantesActuales } from "../../services/postulantesActualesService";
+import FiltrosPostulantes from "../../components/postulantes/FiltrosPostulantes";
+import TablaPostulantes from "../../components/postulantes/TablaPostulantes";
+import ModalDetalle from "../../components/postulantes/ModalDetalle";
+import ReporteResumido from "../../components/postulantes/ReporteResumido";
 import PostulantesCharts from "../../components/PostulantesCharts";
 
 export default function PostulantesActualesPage() {
   const [todosPostulantes, setTodosPostulantes] = useState([]);
-  const [postulantes, setPostulantes] = useState([]);
   const [filteredPostulantes, setFilteredPostulantes] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [modoVisualizacion, setModoVisualizacion] = useState("ultimos"); // "ultimos" o "todos"
-  const [stats, setStats] = useState({
-    areas: {},
-    carreras: {},
-    universidades: {},
-    estados: {},
-    mediosEntero: {}
-  });
+  const [vistaActual, setVistaActual] = useState("lista"); // "lista" o "reporte"
   
   // Filtros
+  const [busqueda, setBusqueda] = useState("");
   const [filtroEstado, setFiltroEstado] = useState("todos");
   const [filtroPeriodo, setFiltroPeriodo] = useState("todos");
-  const [busqueda, setBusqueda] = useState("");
   const [paginaActual, setPaginaActual] = useState(1);
   const itemsPorPagina = 20;
 
   async function loadData() {
     setLoading(true);
-    // Cargar TODOS los datos primero (sin límite)
-    const data = await getPostulantesActuales(null, 0);
+    const data = await getPostulantesActuales();
     setTodosPostulantes(data);
-    
-    // Aplicar vista de últimos 200 por defecto
-    aplicarVista(data, "ultimos");
-    generarEstadisticas(data);
     setLoading(false);
   }
 
-  function aplicarVista(data, modo) {
-    if (modo === "ultimos") {
-      // Tomar los primeros 200 (ya están ordenados descendentemente por ID)
-      setPostulantes(data.slice(0, 200));
-    } else {
-      // Mostrar todos
-      setPostulantes([...data]);
-    }
-  }
-
-  function cambiarModo(modo) {
-    setModoVisualizacion(modo);
-    aplicarVista(todosPostulantes, modo);
-    setPaginaActual(1);
-  }
-
-  function generarEstadisticas(data) {
-    const areas = {};
-    const carreras = {};
-    const universidades = {};
-    const estados = {};
-    const mediosEntero = {};
-
-    data.forEach((item) => {
-      areas[item.area] = (areas[item.area] || 0) + 1;
-      carreras[item.carrera] = (carreras[item.carrera] || 0) + 1;
-      universidades[item.universidad] = (universidades[item.universidad] || 0) + 1;
-      estados[item.estado_postulante] = (estados[item.estado_postulante] || 0) + 1;
-      mediosEntero[item.medio_enteró] = (mediosEntero[item.medio_enteró] || 0) + 1;
-    });
-
-    setStats({ areas, carreras, universidades, estados, mediosEntero });
-  }
+  // Actualizar estado local después de editar
+  const handleEstadoActualizado = (id, nuevoEstado) => {
+    setTodosPostulantes(prev => 
+      prev.map(p => p.id === id ? { ...p, estado_postulante: nuevoEstado } : p)
+    );
+  };
 
   // Aplicar filtros
   useEffect(() => {
-    let filtered = [...postulantes];
+    let filtered = [...todosPostulantes];
     
     // Filtro por estado
     if (filtroEstado !== "todos") {
@@ -112,7 +75,7 @@ export default function PostulantesActualesPage() {
       }
     }
     
-    // Búsqueda por nombre o email
+    // Búsqueda
     if (busqueda) {
       const busquedaLower = busqueda.toLowerCase();
       filtered = filtered.filter(p => 
@@ -124,7 +87,7 @@ export default function PostulantesActualesPage() {
     
     setFilteredPostulantes(filtered);
     setPaginaActual(1);
-  }, [postulantes, filtroEstado, filtroPeriodo, busqueda]);
+  }, [todosPostulantes, filtroEstado, filtroPeriodo, busqueda]);
 
   useEffect(() => {
     loadData();
@@ -135,28 +98,6 @@ export default function PostulantesActualesPage() {
   const indexOfFirstItem = indexOfLastItem - itemsPorPagina;
   const currentItems = filteredPostulantes.slice(indexOfFirstItem, indexOfLastItem);
   const totalPages = Math.ceil(filteredPostulantes.length / itemsPorPagina);
-
-  const getEstadoBadge = (estado) => {
-    const badges = {
-      "falta agendar": "warning",
-      "ya se entrevistó": "success",
-      "rechazó": "danger",
-      "no respondió": "secondary",
-      "en proceso": "info"
-    };
-    return badges[estado] || "secondary";
-  };
-
-  const getEstadoTexto = (estado) => {
-    const textos = {
-      "falta agendar": "📅 Falta agendar",
-      "ya se entrevistó": "✅ Ya se entrevistó",
-      "rechazó": "❌ Rechazó",
-      "no respondió": "📵 No respondió",
-      "en proceso": "🔄 En proceso"
-    };
-    return textos[estado] || estado;
-  };
 
   if (loading) {
     return (
@@ -173,211 +114,86 @@ export default function PostulantesActualesPage() {
     <div>
       <div className="d-flex justify-content-between align-items-center mb-4">
         <h2>📝 Postulantes Actuales (Formulario Wix)</h2>
+        
+        {/* Pestañas de navegación */}
         <div className="btn-group" role="group">
           <button 
-            className={`btn ${modoVisualizacion === "ultimos" ? "btn-primary" : "btn-outline-primary"}`}
-            onClick={() => cambiarModo("ultimos")}
+            className={`btn ${vistaActual === "lista" ? "btn-primary" : "btn-outline-primary"}`}
+            onClick={() => setVistaActual("lista")}
           >
-            📄 Mostrar últimos 200
+            📋 Lista de Postulantes
           </button>
           <button 
-            className={`btn ${modoVisualizacion === "todos" ? "btn-primary" : "btn-outline-primary"}`}
-            onClick={() => cambiarModo("todos")}
+            className={`btn ${vistaActual === "reporte" ? "btn-primary" : "btn-outline-primary"}`}
+            onClick={() => setVistaActual("reporte")}
           >
-            📚 Mostrar todos ({todosPostulantes.length})
+            📊 Generar Reporte
           </button>
         </div>
       </div>
       
       <div className="alert alert-info">
         <strong>Total de postulantes:</strong> {todosPostulantes.length} | 
-        <strong> Mostrando:</strong> {postulantes.length} | 
-        <strong> Después de filtros:</strong> {filteredPostulantes.length}
-        {modoVisualizacion === "ultimos" && <span className="ms-2 badge bg-primary">Últimos 200 por ID</span>}
+        <strong> Mostrando:</strong> {filteredPostulantes.length} después de filtros
       </div>
 
-      {/* Filtros */}
-      <div className="card mb-4">
-        <div className="card-body">
-          <div className="row">
-            <div className="col-md-4 mb-2">
-              <label className="form-label">🔍 Buscar</label>
-              <input
-                type="text"
-                className="form-control"
-                placeholder="Nombre, email o carrera..."
-                value={busqueda}
-                onChange={(e) => setBusqueda(e.target.value)}
+      {vistaActual === "lista" ? (
+        <>
+          {/* Filtros */}
+          <FiltrosPostulantes
+            busqueda={busqueda}
+            setBusqueda={setBusqueda}
+            filtroEstado={filtroEstado}
+            setFiltroEstado={setFiltroEstado}
+            filtroPeriodo={filtroPeriodo}
+            setFiltroPeriodo={setFiltroPeriodo}
+          />
+
+          {/* Tabla de postulantes */}
+          <div className="card mt-4">
+            <div className="card-header">
+              <h4>📋 Lista de Postulantes</h4>
+            </div>
+            <div className="card-body">
+              <TablaPostulantes
+                currentItems={currentItems}
+                indexOfFirstItem={indexOfFirstItem}
+                onEstadoActualizado={handleEstadoActualizado}
               />
-            </div>
-            
-            <div className="col-md-4 mb-2">
-              <label className="form-label">📌 Estado</label>
-              <select 
-                className="form-select"
-                value={filtroEstado}
-                onChange={(e) => setFiltroEstado(e.target.value)}
-              >
-                <option value="todos">Todos los estados</option>
-                <option value="falta agendar">📅 Falta agendar</option>
-                <option value="ya se entrevistó">✅ Ya se entrevistó</option>
-                <option value="rechazó">❌ Rechazó</option>
-                <option value="no respondió">📵 No respondió</option>
-                <option value="en proceso">🔄 En proceso</option>
-              </select>
-            </div>
-            
-            <div className="col-md-4 mb-2">
-              <label className="form-label">📅 Período</label>
-              <select 
-                className="form-select"
-                value={filtroPeriodo}
-                onChange={(e) => setFiltroPeriodo(e.target.value)}
-              >
-                <option value="todos">Todos</option>
-                <option value="1sem">Última semana</option>
-                <option value="2sem">Últimas 2 semanas</option>
-                <option value="1mes">Último mes</option>
-                <option value="3meses">Últimos 3 meses</option>
-              </select>
+              
+              {/* Paginación */}
+              {totalPages > 1 && (
+                <nav className="mt-3">
+                  <ul className="pagination justify-content-center">
+                    <li className={`page-item ${paginaActual === 1 ? 'disabled' : ''}`}>
+                      <button className="page-link" onClick={() => setPaginaActual(paginaActual - 1)}>Anterior</button>
+                    </li>
+                    {[...Array(Math.min(totalPages, 10))].map((_, i) => (
+                      <li key={i} className={`page-item ${paginaActual === i + 1 ? 'active' : ''}`}>
+                        <button className="page-link" onClick={() => setPaginaActual(i + 1)}>{i + 1}</button>
+                      </li>
+                    ))}
+                    {totalPages > 10 && <li className="page-item disabled"><span className="page-link">...</span></li>}
+                    <li className={`page-item ${paginaActual === totalPages ? 'disabled' : ''}`}>
+                      <button className="page-link" onClick={() => setPaginaActual(paginaActual + 1)}>Siguiente</button>
+                    </li>
+                  </ul>
+                </nav>
+              )}
             </div>
           </div>
-        </div>
-      </div>
 
-      {/* Gráficos */}
-      {/* <PostulantesCharts stats={stats} /> */}
+          {/* Gráficos */}
+          <PostulantesCharts stats={null} postulantes={filteredPostulantes} />
 
-      {/* Tabla de postulantes */}
-      <div className="card mt-4">
-        <div className="card-header">
-          <h4>📋 Lista de Postulantes</h4>
-        </div>
-        <div className="card-body">
-          <div className="table-responsive">
-            <table className="table table-hover">
-              <thead className="table-dark">
-                <tr>
-                  <th>#</th>
-                  <th>ID</th>
-                  <th>Fecha</th>
-                  <th>Nombre</th>
-                  <th>Teléfono</th>
-                  <th>Email</th>
-                  <th>Área</th>
-                  <th>Carrera</th>
-                  <th>Universidad</th>
-                  <th>Estado</th>
-                  <th>Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {currentItems.map((postulante, idx) => (
-                  <tr key={postulante.id}>
-                    <td>{indexOfFirstItem + idx + 1}</td>
-                    <td><strong>{postulante.id}</strong></td>
-                    <td>{postulante.fecha_envio ? new Date(postulante.fecha_envio).toLocaleDateString('es-PE') : '-'}</td>
-                    <td>{postulante.nombre}</td>
-                    <td>{postulante.telefono}</td>
-                    <td>{postulante.email}</td>
-                    <td>{postulante.area}</td>
-                    <td>{postulante.carrera}</td>
-                    <td>{postulante.universidad}</td>
-                    <td>
-                      <span className={`badge bg-${getEstadoBadge(postulante.estado_postulante)}`}>
-                        {getEstadoTexto(postulante.estado_postulante)}
-                      </span>
-                    </td>
-                    <td>
-                      <button 
-                        className="btn btn-sm btn-info"
-                        data-bs-toggle="modal"
-                        data-bs-target={`#modal-${postulante.id}`}
-                      >
-                        Ver
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          
-          {/* Paginación */}
-          {totalPages > 1 && (
-            <nav>
-              <ul className="pagination justify-content-center">
-                <li className={`page-item ${paginaActual === 1 ? 'disabled' : ''}`}>
-                  <button className="page-link" onClick={() => setPaginaActual(paginaActual - 1)}>Anterior</button>
-                </li>
-                {[...Array(Math.min(totalPages, 10))].map((_, i) => (
-                  <li key={i} className={`page-item ${paginaActual === i + 1 ? 'active' : ''}`}>
-                    <button className="page-link" onClick={() => setPaginaActual(i + 1)}>{i + 1}</button>
-                  </li>
-                ))}
-                {totalPages > 10 && <li className="page-item disabled"><span className="page-link">...</span></li>}
-                <li className={`page-item ${paginaActual === totalPages ? 'disabled' : ''}`}>
-                  <button className="page-link" onClick={() => setPaginaActual(paginaActual + 1)}>Siguiente</button>
-                </li>
-              </ul>
-            </nav>
-          )}
-        </div>
-      </div>
-
-      {/* Gráficos */}
-      <PostulantesCharts stats={stats} />
-
-      {/* Modales para ver detalles */}
-      {currentItems.map((postulante) => (
-        <div key={`modal-${postulante.id}`} className="modal fade" id={`modal-${postulante.id}`} tabIndex="-1">
-          <div className="modal-dialog modal-lg">
-            <div className="modal-content">
-              <div className="modal-header">
-                <h5 className="modal-title">Detalles del Postulante - ID: {postulante.id}</h5>
-                <button type="button" className="btn-close" data-bs-dismiss="modal"></button>
-              </div>
-              <div className="modal-body">
-                <div className="row">
-                  <div className="col-md-6">
-                    <p><strong>📅 Fecha:</strong> {postulante.fecha_envio ? new Date(postulante.fecha_envio).toLocaleString('es-PE') : '-'}</p>
-                    <p><strong>👤 Nombre:</strong> {postulante.nombre}</p>
-                    <p><strong>📧 Email:</strong> {postulante.email}</p>
-                    <p><strong>📱 Teléfono:</strong> {postulante.telefono}</p>
-                    <p><strong>🎂 Edad:</strong> {postulante.edad}</p>
-                    <p><strong>📍 Ubicación:</strong> {postulante.distrito}, {postulante.provincia}, {postulante.pais}</p>
-                  </div>
-                  <div className="col-md-6">
-                    <p><strong>🏢 Área:</strong> {postulante.area}</p>
-                    <p><strong>🎓 Carrera:</strong> {postulante.carrera}</p>
-                    <p><strong>🏫 Universidad:</strong> {postulante.universidad}</p>
-                    <p><strong>📚 Ciclo:</strong> {postulante.ciclo}</p>
-                    <p><strong>💼 Modalidad:</strong> {postulante.modalidad_trabajo}</p>
-                    <p><strong>📢 Se enteró por:</strong> {postulante.medio_enteró}</p>
-                  </div>
-                </div>
-                <hr />
-                <div className="row">
-                  <div className="col-12">
-                    <p><strong>💼 Experiencia previa:</strong> {postulante.experiencia_previa || "No especifica"}</p>
-                    <p><strong>🔗 LinkedIn:</strong> {postulante.linkedin ? <a href={postulante.linkedin} target="_blank" rel="noopener noreferrer">Ver perfil</a> : "No especifica"}</p>
-                    {postulante.cv_url && (
-                      <p><strong>📄 CV:</strong> <a href={postulante.cv_url} target="_blank" rel="noopener noreferrer">Descargar CV</a></p>
-                    )}
-                    <p><strong>✅ Cumplió pasos:</strong> {postulante.cumplio_pasos}</p>
-                    {postulante.observacion_rechazo && (
-                      <p><strong>⚠️ Observación:</strong> {postulante.observacion_rechazo}</p>
-                    )}
-                  </div>
-                </div>
-              </div>
-              <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      ))}
+          {/* Modales */}
+          {currentItems.map((postulante) => (
+            <ModalDetalle key={`modal-${postulante.id}`} postulante={postulante} />
+          ))}
+        </>
+      ) : (
+        <ReporteResumido postulantes={todosPostulantes} />
+      )}
     </div>
   );
 }

@@ -1,12 +1,19 @@
 // services/postulantesActualesService.js
-
 const BASE_URL = process.env.NEXT_PUBLIC_SHEETDB_POSTULANTES_ACTUALES;
 const SHEET_NAME = encodeURIComponent("Postulantes Actualizado");
 
-export async function getPostulantesActuales(limite = null, offset = 0, filters = {}) {
+export const ESTADOS_POSTULANTE = [
+  { valor: "NUEVO (FALTA AGENDAR)", label: "🆕 Nuevo (Falta agendar)", badge: "warning" },
+  { valor: "CONTACTADO (SIN RESPUESTA)", label: "📞 Contactado (Sin respuesta)", badge: "secondary" },
+  { valor: "ENTREVISTA AGENDADA", label: "📅 Entrevista agendada", badge: "info" },
+  { valor: "EN EVALUACIÓN", label: "⚖️ En evaluación", badge: "primary" },
+  { valor: "ACEPTADO", label: "✅ Aceptado", badge: "success" },
+  { valor: "DESCARTADO", label: "❌ Descartado", badge: "danger" }
+];
+
+export async function getPostulantesActuales() {
   try {
-    // Construir URL - SIN limit inicial para obtener todos y luego ordenar
-    let url = `${BASE_URL}?sheet=${SHEET_NAME}`;
+    const url = `${BASE_URL}?sheet=${SHEET_NAME}`;
     
     const res = await fetch(url, {
       cache: "no-store",
@@ -25,13 +32,15 @@ export async function getPostulantesActuales(limite = null, offset = 0, filters 
     
     // Mapear y normalizar los datos
     let postulantes = datosValidos.map((item, index) => {
-      // Extraer ID de la columna "ID" en el Excel (con mayúsculas)
-      let id = item["ID"] || index;
-      // Convertir a número si es string
-      if (typeof id === 'string') id = parseInt(id) || index;
+      // Usar el campo "id" de la hoja (minúsculas)
+      const idHoja = item.id || item["id"] || index + 1;
+      
+      // Obtener estado del Excel o asignar "NUEVO (FALTA AGENDAR)" si está vacío
+      let estadoExcel = item["Estado de Postulante"] || "";
+      let estadoInterno = estadoExcel.trim() === "" ? "NUEVO (FALTA AGENDAR)" : estadoExcel;
       
       return {
-        id: id,
+        id: idHoja,  // ID para actualizaciones
         fecha_envio: item["Fecha de envio"] || null,
         fecha_postulacion: item["Fecha de envio"] ? new Date(item["Fecha de envio"]) : null,
         email: item["Correo electrónico"]?.trim() || "",
@@ -57,40 +66,17 @@ export async function getPostulantesActuales(limite = null, offset = 0, filters 
         cv_url: extraerCVUrl(item["Adjunta tu CV"]),
         cumplio_pasos: item["Cumplí con los pasos Antes de la entrevista"] || "No",
         observacion_rechazo: item["Observacion/ Razon de rechazo"] || "",
-        estado_postulante: item["Estado de Postulante"] || "falta agendar"
+        estado_postulante: estadoInterno
       };
     });
     
-    // ORDENAR POR ID DESCENDENTE (más reciente primero)
-    // Esto asegura que los últimos registros (ID más alto) aparezcan primero
+    // ORDENAR POR ID DESCENDENTE (número más alto primero)
     postulantes.sort((a, b) => {
-      const idA = typeof a.id === 'number' ? a.id : 0;
-      const idB = typeof b.id === 'number' ? b.id : 0;
-      return idB - idA; // Descendente
+      return b.id - a.id;
     });
     
-    // Si hay límite, tomar los primeros N después del ordenamiento
-    if (limite && limite !== 'all' && typeof limite === 'number') {
-      const start = offset;
-      const end = start + limite;
-      postulantes = postulantes.slice(start, end);
-    }
-    
-    // Aplicar filtros adicionales
-    if (filters.estado && filters.estado !== 'todos') {
-      postulantes = postulantes.filter(p => p.estado_postulante === filters.estado);
-    }
-    
-    if (filters.fecha_inicio && filters.fecha_fin) {
-      const fechaInicio = new Date(filters.fecha_inicio);
-      const fechaFin = new Date(filters.fecha_fin);
-      postulantes = postulantes.filter(p => {
-        if (!p.fecha_postulacion) return false;
-        return p.fecha_postulacion >= fechaInicio && p.fecha_postulacion <= fechaFin;
-      });
-    }
-    
-    console.log(`📊 Total postulantes actuales: ${datosValidos.length} | Mostrando: ${postulantes.length}`);
+    console.log(`📊 Total postulantes: ${postulantes.length}`);
+    console.log(`📝 IDs: ${postulantes.slice(0, 5).map(p => p.id).join(', ')}...`);
     
     return postulantes;
     
@@ -100,7 +86,43 @@ export async function getPostulantesActuales(limite = null, offset = 0, filters 
   }
 }
 
-// Funciones de normalización (igual que antes)
+// ACTUALIZAR estado usando /id/ (como en onboarding)
+export async function actualizarEstadoPostulante(id, nuevoEstado) {
+  try {
+    // Esta es la URL correcta: /id/{id}?sheet=Nombre
+    const updateUrl = `${BASE_URL}/id/${id}?sheet=${SHEET_NAME}`;
+    
+    console.log(`🔄 Actualizando ID: ${id} a estado: ${nuevoEstado}`);
+    
+    const response = await fetch(updateUrl, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        data: {
+          "Estado de Postulante": nuevoEstado
+        }
+      })
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`Error ${response.status}: ${errorText}`);
+      throw new Error(`Error ${response.status}: ${errorText}`);
+    }
+    
+    const result = await response.json();
+    console.log(`✅ Estado actualizado para ID ${id}: ${nuevoEstado}`);
+    return { success: true, data: result };
+    
+  } catch (error) {
+    console.error("Error actualizando estado:", error);
+    return { success: false, error: error.message };
+  }
+}
+
+// Resto de funciones de normalización (igual que antes)
 function normalizarAreaPostulacion(area = "") {
   if (!area || area === "No especificado") return "No especificado";
   

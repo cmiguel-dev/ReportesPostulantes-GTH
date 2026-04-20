@@ -4,7 +4,7 @@
 import { useEffect, useRef } from "react";
 import Chart from "chart.js/auto";
 
-export default function PostulantesCharts({ stats }) {
+export default function PostulantesCharts({ postulantes }) {
   const areasChartRef = useRef(null);
   const carrerasChartRef = useRef(null);
   const universidadesChartRef = useRef(null);
@@ -18,14 +18,27 @@ export default function PostulantesCharts({ stats }) {
   });
 
   useEffect(() => {
-    if (!stats) return;
+    if (!postulantes || postulantes.length === 0) return;
+    
+    // Calcular estadísticas
+    const areas = {};
+    const carreras = {};
+    const universidades = {};
+    const estados = {};
+    
+    postulantes.forEach(p => {
+      areas[p.area] = (areas[p.area] || 0) + 1;
+      carreras[p.carrera] = (carreras[p.carrera] || 0) + 1;
+      universidades[p.universidad] = (universidades[p.universidad] || 0) + 1;
+      estados[p.estado_postulante] = (estados[p.estado_postulante] || 0) + 1;
+    });
     
     // Gráfico de Áreas
-    if (areasChartRef.current && Object.keys(stats.areas).length > 0) {
+    if (areasChartRef.current && Object.keys(areas).length > 0) {
       if (chartsRef.current.areas) chartsRef.current.areas.destroy();
       
       const ctx = areasChartRef.current.getContext("2d");
-      const areasData = Object.entries(stats.areas)
+      const areasData = Object.entries(areas)
         .sort((a, b) => b[1] - a[1])
         .slice(0, 8);
       
@@ -53,11 +66,11 @@ export default function PostulantesCharts({ stats }) {
     }
     
     // Gráfico de Carreras (Pie)
-    if (carrerasChartRef.current && Object.keys(stats.carreras).length > 0) {
+    if (carrerasChartRef.current && Object.keys(carreras).length > 0) {
       if (chartsRef.current.carreras) chartsRef.current.carreras.destroy();
       
       const ctx = carrerasChartRef.current.getContext("2d");
-      const carrerasData = Object.entries(stats.carreras)
+      const carrerasData = Object.entries(carreras)
         .sort((a, b) => b[1] - a[1])
         .slice(0, 6);
       
@@ -88,11 +101,11 @@ export default function PostulantesCharts({ stats }) {
     }
     
     // Gráfico de Universidades
-    if (universidadesChartRef.current && Object.keys(stats.universidades).length > 0) {
+    if (universidadesChartRef.current && Object.keys(universidades).length > 0) {
       if (chartsRef.current.universidades) chartsRef.current.universidades.destroy();
       
       const ctx = universidadesChartRef.current.getContext("2d");
-      const universidadesData = Object.entries(stats.universidades)
+      const universidadesData = Object.entries(universidades)
         .sort((a, b) => b[1] - a[1])
         .slice(0, 8);
       
@@ -111,38 +124,59 @@ export default function PostulantesCharts({ stats }) {
         options: {
           responsive: true,
           maintainAspectRatio: true,
-          indexAxis: 'y', // Gráfico horizontal para mejor visualización
+          indexAxis: 'y',
         }
       });
     }
     
     // Gráfico de Estados
-    if (estadosChartRef.current && Object.keys(stats.estados).length > 0) {
+    if (estadosChartRef.current && Object.keys(estados).length > 0) {
       if (chartsRef.current.estados) chartsRef.current.estados.destroy();
       
       const ctx = estadosChartRef.current.getContext("2d");
-      const estadosData = Object.entries(stats.estados);
+      const estadosData = Object.entries(estados);
+      
+      const coloresEstados = {
+        "NUEVO (FALTA AGENDAR)": "rgba(255, 193, 7, 0.6)",
+        "CONTACTADO (SIN RESPUESTA)": "rgba(108, 117, 125, 0.6)",
+        "ENTREVISTA AGENDADA": "rgba(13, 202, 240, 0.6)",
+        "EN EVALUACIÓN": "rgba(13, 110, 253, 0.6)",
+        "ACEPTADO": "rgba(25, 135, 84, 0.6)",
+        "DESCARTADO": "rgba(220, 53, 69, 0.6)"
+      };
       
       chartsRef.current.estados = new Chart(ctx, {
         type: "doughnut",
         data: {
-          labels: estadosData.map(([key]) => key),
+          labels: estadosData.map(([key]) => {
+            const textos = {
+              "NUEVO (FALTA AGENDAR)": "🆕 Nuevo",
+              "CONTACTADO (SIN RESPUESTA)": "📞 Contactado",
+              "ENTREVISTA AGENDADA": "📅 Entrevista",
+              "EN EVALUACIÓN": "⚖️ Evaluación",
+              "ACEPTADO": "✅ Aceptado",
+              "DESCARTADO": "❌ Descartado"
+            };
+            return textos[key] || key;
+          }),
           datasets: [{
             data: estadosData.map(([, value]) => value),
-            backgroundColor: [
-              "rgba(255, 99, 132, 0.6)", // falta agendar
-              "rgba(54, 162, 235, 0.6)", // ya se entrevistó
-              "rgba(255, 206, 86, 0.6)",  // rechazó
-              "rgba(75, 192, 192, 0.6)",  // no respondió
-              "rgba(153, 102, 255, 0.6)"  // otros
-            ]
+            backgroundColor: estadosData.map(([key]) => coloresEstados[key] || "rgba(200, 200, 200, 0.6)"),
           }]
         },
         options: {
           responsive: true,
           plugins: {
             legend: { position: "bottom" },
-            tooltip: { callbacks: { label: (ctx) => `${ctx.label}: ${ctx.raw} (${Math.round(ctx.raw / Object.values(stats.estados).reduce((a,b) => a+b, 0) * 100)}%)` } }
+            tooltip: { 
+              callbacks: { 
+                label: (ctx) => {
+                  const total = Object.values(estados).reduce((a,b) => a+b, 0);
+                  const porcentaje = Math.round(ctx.raw / total * 100);
+                  return `${ctx.label}: ${ctx.raw} (${porcentaje}%)`;
+                }
+              } 
+            }
           }
         }
       });
@@ -153,10 +187,14 @@ export default function PostulantesCharts({ stats }) {
         if (chart) chart.destroy();
       });
     };
-  }, [stats]);
+  }, [postulantes]);
+
+  if (!postulantes || postulantes.length === 0) {
+    return <div className="alert alert-warning">No hay datos para mostrar gráficos</div>;
+  }
 
   return (
-    <div className="row">
+    <div className="row mt-4">
       <div className="col-md-6 mb-4">
         <div className="card">
           <div className="card-body">
