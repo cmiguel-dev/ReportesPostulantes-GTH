@@ -49,18 +49,6 @@ export default function RootLayout({ children }) {
                   Postulantes Actuales (Wix)
                 </Link>
               </li>
-
-              {/* <li className="nav-item">
-                <Link href="/permisos" className="nav-link text-white">
-                  Permisos
-                </Link>
-              </li>
-
-              <li className="nav-item">
-                <Link href="/salida" className="nav-link text-white">
-                  Salida
-                </Link>
-              </li> */}
             </ul>
           </aside>
 
