@@ -4,7 +4,7 @@ import Script from "next/script";
 import Link from "next/link";
 
 export const metadata = {
-  title: "GTH System",
+  title: "Sanilab - Seguimiento de postulantes",
   description: "Sistema de Gestión de Talento Humano",
 };
 
@@ -26,7 +26,7 @@ export default function RootLayout({ children }) {
           >
             <h4>
               <Link href="/" className="text-white text-decoration-none">
-                Reporter de Postulantes - GTH
+                Seguimiento de postulantes - GTH
               </Link>
             </h4>
             <hr />
