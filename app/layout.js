@@ -39,7 +39,7 @@ export default function RootLayout({ children }) {
               </li>
               <hr />
               <li className="nav-item">
-                <Link href="/reportes" className="nav-link text-white">
+                <Link href="/postulantes-antiguos" className="nav-link text-white">
                   Postulantes Antiguos
                 </Link>
               </li>

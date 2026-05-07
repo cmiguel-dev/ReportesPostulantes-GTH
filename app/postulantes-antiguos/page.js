@@ -1,4 +1,4 @@
-// app/reportes/page.js
+// app/postulantes-antiguos/page.js
 
 "use client";
 
@@ -11,7 +11,7 @@ import {
 } from "../../utils/normalizersCampos";
 import BarChart from "../../components/BarChart";
 
-export default function ReportesPage() {
+export default function PostulantesAntiguosPage() {
   const [data, setData] = useState([]);
   const [stats, setStats] = useState({
     universidades: {},
