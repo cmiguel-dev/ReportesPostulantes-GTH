@@ -1,7 +1,18 @@
 // app/api/onboarding/obtener-progreso/route.js
+//
+// La llama el código Velo de la página de Wix "Bienvenido al Onboarding" cuando
+// la persona escribe su DNI. Ningún archivo de este repositorio la invoca.
+
+import {
+  buscarPorDni,
+  forzarTexto,
+  leerJson,
+  normalizarDni,
+} from "../../../../utils/sheetdb";
 
 const SHEET_PROGRESO = encodeURIComponent("onboarding_progreso");
 const SHEET_ACUERDO = encodeURIComponent("Base de datos/Acuerdo de compromiso");
+const COLUMNA_DNI_ACUERDO = "DNI (Documento de Identificación)";
 
 const API_URL = process.env.NEXT_PUBLIC_SHEETDB_ONBOARDING;
 
@@ -21,7 +32,7 @@ export async function OPTIONS() {
 export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url);
-    const dni = searchParams.get("dni");
+    const dni = normalizarDni(searchParams.get("dni"));
 
     if (!dni) {
       return new Response(JSON.stringify({ error: "DNI requerido" }), {
@@ -36,9 +47,17 @@ export async function GET(request) {
 
     const progresoRes = await fetch(`${API_URL}?sheet=${SHEET_PROGRESO}`);
 
-    const progresoData = await progresoRes.json();
+    const progresoData = await leerJson(progresoRes);
 
-    let usuario = progresoData.find((item) => item.dni === dni);
+    // Fallar en voz alta: tratar un error como "no tiene fila" le crearía una
+    // segunda a quien sí la tenía.
+    if (!progresoRes.ok || !Array.isArray(progresoData)) {
+      throw new Error(
+        `SheetDB no devolvió onboarding_progreso (HTTP ${progresoRes.status})`,
+      );
+    }
+
+    let usuario = buscarPorDni(progresoData, "dni", dni);
 
     // 2. SI NO EXISTE -> BUSCAR EN ACUERDO
 
@@ -47,11 +66,15 @@ export async function GET(request) {
 
       const acuerdoRes = await fetch(`${API_URL}?sheet=${SHEET_ACUERDO}`);
 
-      const acuerdoData = await acuerdoRes.json();
+      const acuerdoData = await leerJson(acuerdoRes);
 
-      const empleado = acuerdoData.find(
-        (item) => item["DNI (Documento de Identificación)"] === dni,
-      );
+      if (!acuerdoRes.ok || !Array.isArray(acuerdoData)) {
+        throw new Error(
+          `SheetDB no devolvió la hoja del acuerdo (HTTP ${acuerdoRes.status})`,
+        );
+      }
+
+      const empleado = buscarPorDni(acuerdoData, COLUMNA_DNI_ACUERDO, dni);
 
       if (!empleado) {
         console.log(
@@ -74,7 +97,7 @@ export async function GET(request) {
         nombre: empleado["Nombre y Apellidos"] || "",
         carrera: empleado["Carrera"] || "",
         universidad: empleado["Centro de estudios"] || "",
-        celular: `'${empleado["Número de celular"] || ''}`,
+        celular: String(empleado["Número de celular"] ?? "").trim(),
         area: empleado["Área a la que ingresaras(mencionada en la entrevista) "] || "",
         fecha_inicio: empleado["Escribir fecha de inicio en la empresa (acordado en la entrevista)"] || "",
         paso1: "pendiente",
@@ -99,15 +122,35 @@ export async function GET(request) {
 
       console.log("[Obtener] Creando fila automática:", nuevoRegistro);
 
-      await fetch(`${API_URL}?sheet=${SHEET_PROGRESO}`, {
+      // NO incluir `id`: lo genera una ARRAYFORMULA y escribirlo la rompe para
+      // toda la hoja. Ver utils/sheetdb.js.
+      const creacionRes = await fetch(`${API_URL}?sheet=${SHEET_PROGRESO}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          data: nuevoRegistro,
+          // Forzados a texto solo al ESCRIBIR. `nuevoRegistro` conserva los
+          // valores limpios porque son los que se devuelven a Wix, y el DNI con
+          // apóstrofo no lo encontraría ninguna búsqueda posterior.
+          data: {
+            ...nuevoRegistro,
+            dni: forzarTexto(dni),
+            celular: forzarTexto(nuevoRegistro.celular),
+          },
         }),
       });
+
+      // Si la creación falla, la persona puede continuar igual: su primer
+      // "Enviar Respuesta" crea la fila. Se registra el fallo pero no se
+      // reintenta aquí — un reintento gastaría cuota y podría duplicar la fila.
+      if (!creacionRes.ok) {
+        console.error(
+          "[Obtener] No se pudo crear la fila:",
+          creacionRes.status,
+          await leerJson(creacionRes),
+        );
+      }
 
       usuario = nuevoRegistro;
     }
@@ -130,6 +173,8 @@ export async function GET(request) {
 
     return new Response(
       JSON.stringify({
+        // El DNI tal y como está en la hoja, no como lo tecleó la persona: es el
+        // valor con el que guardar-progreso localizará la fila después.
         dni: usuario.dni,
         nombre: usuario.nombre || "",
         carrera: usuario.carrera || "",
